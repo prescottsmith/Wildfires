@@ -1,4 +1,5 @@
 # import relevant packages
+import kaggle
 import sqlite3
 import pandas as pd
 import numpy as np
@@ -27,7 +28,6 @@ relevant_columns = ['DISCOVERY_DOY', 'DISCOVERY_TIME', 'STAT_CAUSE_DESCR',
 df = raw_df[relevant_columns]
 
 # Augment/fix data columns for better modeling
-
 df = df.dropna()
 df = df.reset_index(drop=True)
 
@@ -39,7 +39,6 @@ def time_string_convert(dataframe, column):
         new_rows.append(time)
     dataframe[column] = new_rows
     return dataframe[column]
-
 def add_day_difference(dataframe, cont_column, disc_column):
     diff = []
     for i in range(len(dataframe)):
@@ -53,8 +52,8 @@ def add_day_difference(dataframe, cont_column, disc_column):
 
 df['DAY_DIFF'] = add_day_difference(df, 'CONT_DOY', 'DISCOVERY_DOY')
 
-extreme_df = df[df['DAY_DIFF']>30]
 
+#Getting rid of likely mis-entered observations
 entry_error = []
 for i in range(len(df)):
     if df['DAY_DIFF'][i]>30 and df['FIRE_SIZE'][i]<10:
@@ -67,20 +66,18 @@ df['LIKELY_ENTRY_ERROR'] = entry_error
 clean_df = df[df['LIKELY_ENTRY_ERROR']==False]
 
 #Final column selection
-
 quick_train_columns = ['LATITUDE', 'LONGITUDE', 'DAY_DIFF',
                        'FIRE_SIZE', 'STAT_CAUSE_DESCR']
-
 final_df = clean_df[quick_train_columns]
 
 
-# Define test_train_split function
+
+# Define test_train_splits
 def test_train_split(dataframe):
     """Split dataframe into train and test data"""
     train = dataframe.sample(frac=0.8, random_state=100)  # random state is a seed value
     test = dataframe.drop(train.index)
     return train, test
-
 train_df, test_df = test_train_split(final_df)
 
 train_y = train_df['STAT_CAUSE_DESCR']
@@ -105,6 +102,7 @@ def labels_to_ints(dataframe):
     return new_frame
 train_y_int = np.asarray(labels_to_ints(train_y))
 test_y_int = labels_to_ints(test_y)
+
 
 train_df_final = train_x
 
