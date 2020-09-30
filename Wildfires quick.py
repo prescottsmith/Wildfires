@@ -15,21 +15,27 @@ from tensorflow.keras.regularizers import l1
 from matplotlib import pyplot as plt
 
 # Connect to SQLite database and import Fires table
-conn = None
-conn = sqlite3.connect('Data/FPA_FOD_20170508.sqlite')
+#conn = None
+#conn = sqlite3.connect('Data/FPA_FOD_20170508.sqlite')
 # cur = conn.cursor()
-raw_df = pd.read_sql("""SELECT * FROM fires WHERE FIRE_YEAR > 2015 LIMIT 10000""", con=conn)
-conn.close()
+#raw_df = pd.read_sql("""SELECT * FROM fires WHERE FIRE_YEAR > 2015 LIMIT 10000""", con=conn)
+#conn.close()
+
+
 
 # Select relevant columns
-relevant_columns = ['DISCOVERY_DOY', 'DISCOVERY_TIME', 'STAT_CAUSE_DESCR',
-                    'CONT_DOY', 'CONT_TIME', 'FIRE_SIZE', 'LATITUDE', 'LONGITUDE',
-                    'STATE', 'COUNTY']
-df = raw_df[relevant_columns]
+#relevant_columns = ['DISCOVERY_DOY', 'DISCOVERY_TIME', 'STAT_CAUSE_DESCR',
+#                    'CONT_DOY', 'CONT_TIME', 'FIRE_SIZE', 'LATITUDE', 'LONGITUDE',
+#                    'STATE', 'COUNTY']
+#df = raw_df[relevant_columns]
 
 # Augment/fix data columns for better modeling
-df = df.dropna()
-df = df.reset_index(drop=True)
+#df = df.dropna()
+#df = df.reset_index(drop=True)
+
+
+#new data import
+df = pd.read_csv('data/wildfires.csv')
 
 
 def time_string_convert(dataframe, column):
@@ -39,6 +45,7 @@ def time_string_convert(dataframe, column):
         new_rows.append(time)
     dataframe[column] = new_rows
     return dataframe[column]
+
 def add_day_difference(dataframe, cont_column, disc_column):
     diff = []
     for i in range(len(dataframe)):
@@ -96,10 +103,12 @@ def labels_to_ints(dataframe):
     d = {'Lightning': 0, 'Miscellaneous': 1, 'Railroad': 2,
          'Debris Burning':3, 'Children' : 4, 'Campfire': 5,
          'Arson' : 6, 'Equipment Use' : 7,
-         'Smoking' : 8}
+         'Smoking' : 8, 'Missing/Undefined' : 9, 'Structure' : 10,
+         'Fireworks' : 11, 'Powerline' : 12}
 
     new_frame= [d[k] for k in dataframe]
     return new_frame
+
 train_y_int = np.asarray(labels_to_ints(train_y))
 test_y_int = labels_to_ints(test_y)
 
@@ -153,15 +162,16 @@ feature_columns.append(fire_size_numeric_column)
 features_layer = layers.DenseFeatures(feature_columns)
 
 
+
 def create_model(my_learning_rate, my_feature_layer):
     """Create and compile a deep neural net."""
     model = tf.keras.models.Sequential()
 #    model.add(my_feature_layer)
-    model.add(tf.keras.layers.Dense(units=200, activation='relu', input_shape=(1,4)))
+    model.add(tf.keras.layers.Dense(units=100, activation='relu', input_shape=(4,)))
     model.add(tf.keras.layers.Dropout(rate=0.2))
-    model.add(tf.keras.layers.Dense(units=100, activation='relu'))
+    model.add(tf.keras.layers.Dense(units=50, activation='relu'))
     model.add(tf.keras.layers.Dropout(rate=0.1))
-    model.add(tf.keras.layers.Dense(units=9, activation='softmax'))
+    model.add(tf.keras.layers.Dense(units=13, activation='softmax'))
 
     model.compile(loss=loss_function,
                   optimizer=optimizer,
@@ -185,17 +195,17 @@ def train_model(model, train_features, train_labels, epochs,
 
 
 #Set hyperparameters and methods for training
-learning_rate = 0.001
-epochs = 100
+learning_rate = 0.1
+epochs = 10
 batch_size = 100
-validation_split = 0.2
+validation_split = 0.4
 loss_function = categorical_crossentropy
 optimizer = SGD(learning_rate =learning_rate)
 
 tf.keras.backend.set_floatx('float64')
 
 #Establish the model's topography (Call your model function)
-my_model = create_model(learning_rate, features_layer)
+my_model = create_model(learning_rate, train_x_norm)
 
 # Train model on the normalized training set.
 epochs, hist = train_model(my_model, train_x_norm, train_y_encoded,
