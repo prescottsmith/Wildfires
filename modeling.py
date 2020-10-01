@@ -18,7 +18,7 @@ def optimizer(learning_rate):
 def create(my_learning_rate=0.01):
     """Create and compile a deep neural net."""
     model = tf.keras.models.Sequential()
-    model.add(tf.keras.layers.Dense(units=100, activation='relu', input_shape=(4,)))
+    model.add(tf.keras.layers.Dense(units=100, activation='relu', input_shape=(370,)))
     model.add(tf.keras.layers.Dropout(rate=0.2))
     model.add(tf.keras.layers.Dense(units=50, activation='relu'))
     model.add(tf.keras.layers.Dropout(rate=0.1))

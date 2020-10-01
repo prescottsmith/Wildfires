@@ -33,6 +33,9 @@ def labels_to_ints(dataframe):
     new_frame = [d[k] for k in dataframe]
     return new_frame
 
+
+
+
 # Main data_prep function
 def return_processed_data(filepath):
 
@@ -50,13 +53,22 @@ def return_processed_data(filepath):
         entry_error.append(error)
 
     df['LIKELY_ENTRY_ERROR'] = entry_error
+    df = df.dropna(axis=0, subset=['DISCOVERY_TIME'])
+    df = df.dropna(axis=0, subset=['CONT_TIME'])
     clean_df = df[df['LIKELY_ENTRY_ERROR'] == False]
 
     # Final column selection
+#    quick_train_columns = ['LATITUDE', 'LONGITUDE', 'DAY_DIFF', 'DISCOVERY_TIME',
+#                           'DISCOVERY_DOY', 'CONT_TIME', 'CONT_DOY', 'FIRE_SIZE',
+#                           'STAT_CAUSE_DESCR']
+
+    #add discovery time but round/bucket it before one-hot encoding
     quick_train_columns = ['LATITUDE', 'LONGITUDE', 'DAY_DIFF',
-                           'FIRE_SIZE', 'STAT_CAUSE_DESCR']
+                           'DISCOVERY_DOY', 'FIRE_SIZE',
+                           'STAT_CAUSE_DESCR']
 
     final_df = clean_df[quick_train_columns]
+
 
     train_df, test_df = test_train_split(final_df)
 
@@ -79,8 +91,20 @@ def return_processed_data(filepath):
     train_y_encoded = tf.keras.utils.to_categorical(train_y_int)
     test_y_encoded = tf.keras.utils.to_categorical(test_y_int)
 
-    train_x_norm = (train_x - train_x.mean()) / train_x.std()
-    test_x_norm = (test_x - train_x.mean()) / train_x.std()
+    train_non_norm_x = train_x.drop(['LATITUDE', 'LONGITUDE', 'DAY_DIFF', 'FIRE_SIZE'], axis=1)
+    test_non_norm_x = test_x.drop(['LATITUDE', 'LONGITUDE', 'DAY_DIFF', 'FIRE_SIZE'], axis=1)
+
+    train_x_norms = train_x[['LATITUDE', 'LONGITUDE', 'DAY_DIFF', 'FIRE_SIZE']]
+    test_x_norms = test_x[['LATITUDE', 'LONGITUDE', 'DAY_DIFF', 'FIRE_SIZE']]
+
+    train_x_norm = (train_x_norms - train_x_norms.mean()) / train_x_norms.std()
+    test_x_norm = (test_x_norms - train_x_norms.mean()) / train_x_norms.std()
+
+    train_days = pd.get_dummies(train_non_norm_x.DISCOVERY_DOY, prefix='DOY: ')
+    test_days = pd.get_dummies(test_non_norm_x.DISCOVERY_DOY, prefix='DOY: ')
+
+    train_x_norm = train_x_norm.join(train_days)
+    test_x_norm = test_x_norm.join(test_days)
 
     return train_x_norm, train_y_encoded, test_x_norm, test_y_encoded
 

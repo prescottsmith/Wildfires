@@ -13,9 +13,9 @@ my_model = modeling.create(learning_rate)
 
 # Assign ML model hyperparameters
 #learning_rate = 0.1
-epochs = 100
+epochs = 10
 batch_size = 100
-validation_split = 0.4
+validation_split = 0.25
 
 
 # Train model

@@ -1,6 +1,7 @@
 #import kaggle utilities
 from kaggle.api.kaggle_api_extended import KaggleApi
 import os
+import time
 
 #Authenticate with API Server
 api = KaggleApi()
@@ -11,6 +12,7 @@ page = 'rtatman/188-million-us-wildfires'
 page_file = 'FPA_FOD_20170508.sqlite'
 
 api.dataset_download_files(page, page_file)
+
 
 
 #unzip sqlite file
@@ -30,6 +32,7 @@ conn = sqlite3.connect('FPA_FOD_20170508.sqlite/FPA_FOD_20170508.sqlite')
 raw_df = pd.read_sql("""SELECT * FROM fires""", con=conn)
 conn.close()
 
+
 #reduce df to only columns of interest
 relevant_columns = ['DISCOVERY_DOY', 'DISCOVERY_TIME', 'STAT_CAUSE_DESCR',
                     'CONT_DOY', 'CONT_TIME', 'FIRE_SIZE', 'LATITUDE', 'LONGITUDE',
@@ -38,10 +41,36 @@ df = raw_df[relevant_columns]
 
 #Drop NAs
 df = df.dropna()
+df = df.dropna(axis=0, subset=['DISCOVERY_TIME'])
+df = df.dropna(axis=0, subset=['CONT_TIME'])
 df = df.reset_index(drop=True)
 
+#fix time formatting
+new_times = []
+i=0
+for row in df['DISCOVERY_TIME']:
+    new = time.strptime(row, "%H%M")
+    new_times.append(new)
+    print(i)
+    i=i+1
+
+#times_df['DISCOVERY_TIME2'] = new_times
+
+new_times = []
+i=0
+for row in df['CONT_TIME']:
+    new = time.strptime(row, "%H%M")
+    new_times.append(new)
+    print(i)
+    i=i+1
+
+#times_df['CONT_TIME2'] = new_times
+
+
+#df = df.join(times_df)
+
 #save dataframe to data folder for use
-df.to_csv (r'data/wildfires.csv', index = False, header=True)
+df.to_csv(r'data/wildfires.csv', index = False, header=True)
 
 #delete downloaded sqlite file/folder
 import shutil
