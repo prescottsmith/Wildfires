@@ -3,13 +3,15 @@ import kaggle
 import sqlite3
 import pandas as pd
 import numpy as np
+import datetime
+import time
 import tensorflow as tf
 from datetime import datetime
 from tensorflow.keras import layers
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Flatten, Conv2D, MaxPooling2D
-from tensorflow.keras.losses import mean_squared_error
-from tensorflow.keras.optimizers import RMSprop
+from tensorflow.keras.losses import categorical_crossentropy
+from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.regularizers import l1
 
 from matplotlib import pyplot as plt
@@ -37,11 +39,28 @@ from matplotlib import pyplot as plt
 #new data import
 df = pd.read_csv('data/wildfires.csv')
 
+def burn_time_calc(dataframe):
+    total_time = []
+    dataframe['working_time'] = dataframe['CONT_TIME']-dataframe['DISCOVERY_TIME']
+    for i in range(len(dataframe)):
+        print(i)
+        new_value = timedelta(minutes=dataframe['DAY_DIFF'][i]*1440) + dataframe['working_time'][i]
+        secs = new_value.total_seconds()
+        minutes = secs/60
+        total_time.append(minutes)
+    dataframe['TOTAL_TIME']=total_time
+    return dataframe
 
 def time_string_convert(dataframe, column):
     new_rows = []
     for row in dataframe[column]:
-        time = datetime.strptime(row, '%H%M')
+        if row <100:
+            value = '00'+str(row)
+        elif row <1000:
+            value = '0'+str(row)
+        else:
+            value = str(row)
+        time = datetime.strptime(value, '%H%M')
         new_rows.append(time)
     dataframe[column] = new_rows
     return dataframe[column]
@@ -71,11 +90,22 @@ for i in range(len(df)):
 
 df['LIKELY_ENTRY_ERROR'] = entry_error
 clean_df = df[df['LIKELY_ENTRY_ERROR']==False]
+clean_df = clean_df.reset_index(drop=True)
+
+new_df=clean_df.copy()
+
+new_df['DISCOVERY_TIME'] = time_string_convert(new_df, 'DISCOVERY_TIME')
+new_df['CONT_TIME'] = time_string_convert(new_df, 'CONT_TIME')
+
+new_df = burn_time_calc(new_df)
+
 
 #Final column selection
-quick_train_columns = ['LATITUDE', 'LONGITUDE', 'DAY_DIFF',
-                       'FIRE_SIZE', 'STAT_CAUSE_DESCR']
-final_df = clean_df[quick_train_columns]
+quick_train_columns = ['LATITUDE', 'LONGITUDE',
+                       'DISCOVERY_DOY', 'STAT_CAUSE_DESCR',
+                       'TOTAL_TIME', 'FIRE_SIZE_CLASS']
+
+final_df = new_df[quick_train_columns]
 
 
 
@@ -87,11 +117,15 @@ def test_train_split(dataframe):
     return train, test
 train_df, test_df = test_train_split(final_df)
 
+train_y = train_df['FIRE_SIZE_CLASS']
+train_x = train_df.drop(['STAT_CAUSE_DESCR'], axis=1)
+train_y = train_y.reset_index(drop=True)
+train_x = train_x.reset_index(drop=True)
 
-train_df = train_df.reset_index(drop=True)
-test_df = test_df.reset_index(drop=True)
-
-
+test_y = train_df['STAT_CAUSE_DESCR']
+test_x = train_df.drop(['STAT_CAUSE_DESCR'], axis=1)
+test_y = train_y.reset_index(drop=True)
+test_x = train_x.reset_index(drop=True)
 
 
 #Turn labels into integers
@@ -105,16 +139,18 @@ def labels_to_ints(dataframe):
     new_frame= [d[k] for k in dataframe]
     return new_frame
 
-train_df['STAT_CAUSE_DESCR'] = labels_to_ints(train_df['STAT_CAUSE_DESCR'])
-test_df['STAT_CAUSE_DESCR'] = labels_to_ints(test_df['STAT_CAUSE_DESCR'])
+train_y_int = np.asarray(labels_to_ints(train_y))
+test_y_int = labels_to_ints(test_y)
 
 
+train_df_final = train_x
 
+train_y_encoded = tf.keras.utils.to_categorical(train_y_int)
+test_y_encoded = tf.keras.utils.to_categorical(test_y_int)
 
-train_df_norm = train_df
-train_df_norm['LATITUDE'] = (train_df_norm['LATITUDE'] - train_df_norm['LATITUDE'].mean())/train_df_norm['LATITUDE'].std()
-train_df_norm['DAY_DIFF'] = (train_df_norm['DAY_DIFF'] - train_df_norm['DAY_DIFF'].mean())/train_df_norm['DAY_DIFF'].std()
-train_df_norm['LONGITUDE'] = (train_df_norm['LONGITUDE'] - train_df_norm['LONGITUDE'].mean())/train_df_norm['LONGITUDE'].std()
+train_x_norm = (train_x - train_x.mean())/train_x.std()
+#train_x_norm['DAY_DIFF'] = (train_x_norm['DAY_DIFF'] - train_x_norm['DAY_DIFF'].mean())/train_x_norm['DAY_DIFF'].std()
+#train_x_norm['FIRE_SIZE'] = (train_x_norm['FIRE_SIZE'] - train_x_norm['FIRE_SIZE'].mean())/train_x_norm['FIRE_SIZE'].std()
 
 
 #bucketizing latitude and longitude crossfeature
@@ -124,16 +160,16 @@ feature_columns = []
 
 # Create a bucket feature column for latitude.
 latitude_as_a_numeric_column = tf.feature_column.numeric_column("LATITUDE")
-latitude_boundaries = list(np.arange(int(min(train_df_norm['LATITUDE'])),
-                                     int(max(train_df_norm['LATITUDE'])),
+latitude_boundaries = list(np.arange(int(min(train_x_norm['LATITUDE'])),
+                                     int(max(train_x_norm['LATITUDE'])),
                                      resolution_in_zs))
 latitude = tf.feature_column.bucketized_column(latitude_as_a_numeric_column,
                                                latitude_boundaries)
 
 # Create a bucket feature column for longitude.
 longitude_as_a_numeric_column = tf.feature_column.numeric_column("LONGITUDE")
-longitude_boundaries = list(np.arange(int(min(train_df_norm['LONGITUDE'])),
-                                      int(max(train_df_norm['LONGITUDE'])),
+longitude_boundaries = list(np.arange(int(min(train_x_norm['LONGITUDE'])),
+                                      int(max(train_x_norm['LONGITUDE'])),
                                       resolution_in_zs))
 
 longitude = tf.feature_column.bucketized_column(longitude_as_a_numeric_column,
@@ -148,12 +184,8 @@ feature_columns.append(crossed_feature)
 day_diff_numeric_column = tf.feature_column.numeric_column("DAY_DIFF")
 feature_columns.append(day_diff_numeric_column)
 
-cause_as_categorical = tf.feature_column.categorical_column_with_identity('STAT_CAUSE_DESCR', num_buckets=13)
-CAUSE = tf.feature_column.indicator_column(cause_as_categorical)
-feature_columns.append(CAUSE)
-
-
-
+fire_size_numeric_column = tf.feature_column.numeric_column("FIRE_SIZE")
+feature_columns.append(fire_size_numeric_column)
 
 # Convert the list of feature columns into a layer that will later be fed into
 # the model.
@@ -161,54 +193,53 @@ features_layer = layers.DenseFeatures(feature_columns)
 
 
 
-def create_model(my_feature_layer):
+def create_model(my_learning_rate, my_feature_layer):
     """Create and compile a deep neural net."""
     model = tf.keras.models.Sequential()
-    model.add(my_feature_layer)
-    model.add(tf.keras.layers.Dense(units=1, input_shape=(4,)))
-
+#    model.add(my_feature_layer)
+    model.add(tf.keras.layers.Dense(units=100, activation='relu', input_shape=(4,)))
+    model.add(tf.keras.layers.Dropout(rate=0.2))
+    model.add(tf.keras.layers.Dense(units=50, activation='relu'))
+    model.add(tf.keras.layers.Dropout(rate=0.1))
+    model.add(tf.keras.layers.Dense(units=13, activation='softmax'))
 
     model.compile(loss=loss_function,
                   optimizer=optimizer,
-                  metrics=['mean_squared_error'])
+                  metrics=['accuracy'])
 
     return model
 
 #Define 'Train Model'
-def train_model(model, dataset, epochs, batch_size, label_name):
-  """Feed a dataset into the model in order to train it."""
+def train_model(model, train_features, train_labels, epochs,
+                batch_size=None, validation_split=0.1):
+    """Train Neural Network model by feeding it data"""
+    history = model.fit(train_features, train_labels,
+                        batch_size=batch_size,
+                        epochs=epochs,
+                        validation_split=validation_split)
 
-  features = {name:np.array(value) for name, value in dataset.items()}
-  label = np.array(features.pop(label_name))
-  history = model.fit(x=features, y=label, batch_size=batch_size,
-                      epochs=epochs, shuffle=True)
+    epochs = history.epoch
+    hist = pd.DataFrame(history.history)
 
-  # The list of epochs is stored separately from the rest of history.
-  epochs = history.epoch
-
-  # Isolate the mean absolute error for each epoch.
-  hist = pd.DataFrame(history.history)
-  rmse = hist["root_mean_squared_error"]
-
-  return epochs, rmse
+    return epochs, hist
 
 
 #Set hyperparameters and methods for training
 learning_rate = 0.1
 epochs = 10
 batch_size = 100
-validation_split = 0.2
-loss_function = "mean_squared_error"
-optimizer = RMSprop(learning_rate =learning_rate)
-label_name = 'FIRE_SIZE'
+validation_split = 0.4
+loss_function = categorical_crossentropy
+optimizer = SGD(learning_rate =learning_rate)
 
 tf.keras.backend.set_floatx('float64')
 
 #Establish the model's topography (Call your model function)
-my_model = create_model(features_layer)
+my_model = create_model(learning_rate, train_x_norm)
 
 # Train model on the normalized training set.
-epochs, rmse = train_model(my_model, train_df_norm, epochs, batch_size, label_name)
+epochs, hist = train_model(my_model, train_x_norm, train_y_encoded,
+                           epochs, batch_size, validation_split)
 
 
 

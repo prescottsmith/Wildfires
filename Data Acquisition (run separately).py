@@ -34,9 +34,9 @@ conn.close()
 
 
 #reduce df to only columns of interest
-relevant_columns = ['DISCOVERY_DOY', 'DISCOVERY_TIME', 'STAT_CAUSE_DESCR',
-                    'CONT_DOY', 'CONT_TIME', 'FIRE_SIZE', 'LATITUDE', 'LONGITUDE',
-                    'STATE', 'COUNTY']
+relevant_columns = ['FIRE_YEAR', 'DISCOVERY_DOY', 'DISCOVERY_TIME', 'CONT_DOY', 'CONT_TIME','STAT_CAUSE_CODE', 'STAT_CAUSE_DESCR',
+                     'FIRE_SIZE', 'LATITUDE', 'LONGITUDE',
+                    'STATE', 'COUNTY', 'FIRE_SIZE_CLASS']
 df = raw_df[relevant_columns]
 
 #Drop NAs

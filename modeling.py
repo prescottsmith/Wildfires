@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.losses import categorical_crossentropy
 from tensorflow.keras.optimizers import SGD
-from tensorflow.keras.regularizers import l1
+from tensorflow.keras.regularizers import l2
 import pandas as pd
 
 
@@ -18,10 +18,10 @@ def optimizer(learning_rate):
 def create(my_learning_rate=0.01):
     """Create and compile a deep neural net."""
     model = tf.keras.models.Sequential()
-    model.add(tf.keras.layers.Dense(units=100, activation='relu', input_shape=(370,)))
+    model.add(tf.keras.layers.Dense(units=100, activation='relu', input_shape=(4944,)))
     model.add(tf.keras.layers.Dropout(rate=0.2))
-    model.add(tf.keras.layers.Dense(units=50, activation='relu'))
-    model.add(tf.keras.layers.Dropout(rate=0.1))
+    model.add(tf.keras.layers.Dense(units=40, activation='relu', kernel_regularizer=l2(l=0.001)))
+    model.add(tf.keras.layers.Dropout(rate=0.25))
     model.add(tf.keras.layers.Dense(units=13, activation='softmax'))
 
     model.compile(loss=loss_function,
